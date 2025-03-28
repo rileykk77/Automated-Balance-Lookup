@@ -78,51 +78,13 @@ def process_lmdb_data(db_path, output_file, max_entries=10):
     with open(output_file, 'w') as json_file:
         json.dump(result, json_file, indent=4)
 
-def get_balance_of_every_address(jsonfile, outputJson):
-    new_json = {}
-    total_coins = 0
-    with open(jsonfile, 'r') as file:
-        data = json.load(file)
 
-    for key, value in data.items():
-        address = value["address"]
-        amount = value["amount"]
-        
-        if address not in new_json:
-            new_json[address] = {
-                "total_amount": 0,
-                "entries": {}
-            }
-        
-        new_json[address]["total_amount"] += amount
-        total_coins += amount
-        
-        new_json[address]["entries"][key] = {
-            "txOutId": value["txOutId"],
-            "txOutIndex": value["txOutIndex"],
-            "amount": value["amount"],
-            "address": value["address"]
-        }
-
-    print(len(new_json))
-    # print(new_json["02da1328fdcd8a3c0a2eb6216bc970ac27980583d48d44f04a8541300241a25b93"])
-    print(total_coins)
-
-    with open(outputJson, 'w') as file:
-        json.dump(new_json, file, indent=4)
-
-    print("New JSON structure created successfully!")
-
-
-def get_balance_of_every_address_excel(jsonfile, output_xlsx):
+def output_balance(jsonfile, owner_mapping_file, output_xlsx, output_json):
     new_dict = {}
-    total_coins = 0
-    
-    # Read your original JSON data
+
     with open(jsonfile, 'r') as file:
         data = json.load(file)
     
-    # Process the data and sum up amounts by address
     for key, value in data.items():
         address = value["address"]
         amount = value["amount"]
@@ -131,27 +93,44 @@ def get_balance_of_every_address_excel(jsonfile, output_xlsx):
             new_dict[address] = 0
         
         new_dict[address] += amount
-        total_coins += amount
     
-    print(f"Unique addresses: {len(new_dict)}")
-    print(f"Total coins: {total_coins}")
-
-    # Create a new workbook and select the active worksheet
+    # Load the address-to-owner mapping JSON file.
+    with open(owner_mapping_file, 'r') as file:
+        owner_mapping = json.load(file)
+    
     wb = Workbook()
     ws = wb.active
     ws.title = "Balances"
 
-    # Write the header row
-    ws.append(["Address", "Balance"])
-    sorted_data = sorted(new_dict.items(), key=lambda x: x[1], reverse=True)
-
-    # Write each address and its total balance to the sheet
-    for address, balance in sorted_data:
-        ws.append([address, balance])
+    # Write the header row: Owner, Address, Balance
+    ws.append(["Owner", "Address", "Balance"])
     
-    # Save the workbook to the specified output file
+    # Sort the dictionary items by balance in descending order.
+    # sorted_data = sorted(new_dict.items(), key=lambda x: x[1], reverse=True)
+
+    # Sort the dictionary items by owner name (alphabetically).
+    sorted_data = sorted(new_dict.items(), key=lambda x: owner_mapping.get(x[0], "unknown"))
+    
+    for address, balance in sorted_data:
+        owner = owner_mapping.get(address, "unknown")
+        ws.append([owner, address, balance])
+    
+    # Save the workbook to the specified output file.
     wb.save(output_xlsx)
     print("Excel file created successfully!")
+
+    # Save the data to a JSON file.
+    json_output = []
+    for address, balance in sorted_data:
+        owner = owner_mapping.get(address, "unknown")
+        json_output.append({
+            "owner": owner,
+            "address": address,
+            "balance": balance
+        })
+    
+    with open(output_json, 'w') as file:
+        json.dump(json_output, file, indent=4)
 
 
 if __name__ == "__main__":
@@ -160,24 +139,26 @@ if __name__ == "__main__":
     username = 'root'
     private_key_path = os.path.expanduser("~/.ssh/id_ed25519")
     remote_lmdb_path = '/home/dragon/node/utxo'
-    local_lmdb_path = '/Users/riley_work/Documents/codes/Automated-Balance-Lookup/data/utxo'
+    # Change to your local path
+    local_lmdb_path = '/Users/riley_work/Documents/codes/Automated-Balance-Lookup/data'
     
     # If your private key has a passphrase, set it here; otherwise, leave as None
     key_passphrase = None  
     
     download_lmdb(remote_host, port, username, private_key_path, remote_lmdb_path, local_lmdb_path, key_passphrase)
 
-    # read lmdb
     # Path to your LMDB data file
-    db_path = './data/utxo'
+    db_path = './data'
 
-    # File to store the JSON output
+    # JSON file to store the lmdb entries
     output_file = 'utxo_lmdb_entries.json'
     process_lmdb_data(db_path, output_file)
 
-    # balance_sheet = 'balances.json'
-    # get_balance_of_every_address(output_file, balance_sheet)
+    # JSON file that stores addresses to users
+    owner_mapping_file = 'address_to_user.json'
+    balance_spreadsheet = 'balance.xlsx'
+    balance_json = 'balance.json'
 
-    get_balance_of_every_address_excel(output_file,'sorted_balance.xlsx')
+    output_balance(output_file, owner_mapping_file, balance_spreadsheet, balance_json)
 
 
