@@ -97,6 +97,10 @@ def output_balance(jsonfile, owner_mapping_file, output_xlsx, output_json):
     # Load the address-to-owner mapping JSON file.
     with open(owner_mapping_file, 'r') as file:
         owner_mapping = json.load(file)
+
+    for address in owner_mapping.keys():
+        if address not in new_dict:
+            new_dict[address] = 0
     
     wb = Workbook()
     ws = wb.active
